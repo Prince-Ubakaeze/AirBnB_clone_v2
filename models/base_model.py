@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Defines the BaseModel class."""
 import uuid
-from datetime import datetime, timedelta, timedelta
+from datetime import datetime, timedelta
 from os import getenv
 
 from sqlalchemy import Column, DateTime, String

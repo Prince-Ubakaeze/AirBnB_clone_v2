@@ -1,46 +1,76 @@
 #!/usr/bin/python3
-"""Unit tests for the DBStorage class."""
-import os
+"""Tests for DBStorage."""
 import unittest
+from os import getenv
 
-from models.engine.db_storage import DBStorage
+from models import storage
+from models.state import State
 
 
 @unittest.skipUnless(
-    os.getenv('HBNB_TYPE_STORAGE') == 'db',
+    getenv('HBNB_TYPE_STORAGE') == 'db',
     'DBStorage tests require HBNB_TYPE_STORAGE=db'
 )
 class TestDBStorage(unittest.TestCase):
-    """Tests for DBStorage."""
+    """Functional tests for DBStorage."""
 
-    def test_db_storage_class(self):
-        """DBStorage should be instantiable."""
-        self.assertIsInstance(DBStorage(), DBStorage)
+    def test_storage_type(self):
+        """Global storage must be DBStorage."""
+        from models.engine.db_storage import DBStorage
 
-    def test_all_method_exists(self):
-        """DBStorage should implement all()."""
-        self.assertTrue(hasattr(DBStorage, 'all'))
-        self.assertTrue(callable(DBStorage.all))
+        self.assertIsInstance(storage, DBStorage)
 
-    def test_new_method_exists(self):
-        """DBStorage should implement new()."""
-        self.assertTrue(hasattr(DBStorage, 'new'))
-        self.assertTrue(callable(DBStorage.new))
+    def test_all_returns_dictionary(self):
+        """all() must return a dictionary."""
+        self.assertIsInstance(storage.all(), dict)
 
-    def test_save_method_exists(self):
-        """DBStorage should implement save()."""
-        self.assertTrue(hasattr(DBStorage, 'save'))
-        self.assertTrue(callable(DBStorage.save))
+    def test_new_and_save(self):
+        """new() and save() must persist an object."""
+        state = State(name='California')
 
-    def test_delete_method_exists(self):
-        """DBStorage should implement delete()."""
-        self.assertTrue(hasattr(DBStorage, 'delete'))
-        self.assertTrue(callable(DBStorage.delete))
+        storage.new(state)
+        storage.save()
 
-    def test_reload_method_exists(self):
-        """DBStorage should implement reload()."""
-        self.assertTrue(hasattr(DBStorage, 'reload'))
-        self.assertTrue(callable(DBStorage.reload))
+        key = 'State.{}'.format(state.id)
+
+        self.assertIn(key, storage.all(State))
+        self.assertEqual(
+            storage.all(State)[key].name,
+            'California'
+        )
+
+        storage.delete(state)
+        storage.save()
+
+    def test_all_with_class_name(self):
+        """all() accepts a class name string."""
+        state = State(name='Nevada')
+
+        storage.new(state)
+        storage.save()
+
+        key = 'State.{}'.format(state.id)
+
+        self.assertIn(key, storage.all('State'))
+
+        storage.delete(state)
+        storage.save()
+
+    def test_delete(self):
+        """delete() removes a persisted object."""
+        state = State(name='Arizona')
+
+        storage.new(state)
+        storage.save()
+
+        key = 'State.{}'.format(state.id)
+
+        self.assertIn(key, storage.all(State))
+
+        storage.delete(state)
+        storage.save()
+
+        self.assertNotIn(key, storage.all(State))
 
 
 if __name__ == '__main__':
