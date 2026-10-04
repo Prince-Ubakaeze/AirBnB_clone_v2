@@ -137,16 +137,23 @@ class HBNBCommand(cmd.Cmd):
             if not key or not value:
                 continue
 
-            if value.startswith('"') and value.endswith('"'):
+            if value.startswith('"'):
+                if not value.endswith('"'):
+                    continue
+
                 value = value[1:-1]
-                value = value.replace('_', ' ')
                 value = value.replace('\\"', '"')
+                value = value.replace('_', ' ')
+
+            elif '.' in value:
+                try:
+                    value = float(value)
+                except ValueError:
+                    continue
+
             else:
                 try:
-                    if '.' in value:
-                        value = float(value)
-                    else:
-                        value = int(value)
+                    value = int(value)
                 except ValueError:
                     continue
 
