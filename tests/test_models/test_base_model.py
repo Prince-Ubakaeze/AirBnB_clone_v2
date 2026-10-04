@@ -2,12 +2,21 @@
 """ """
 from models.base_model import BaseModel
 import unittest
+from os import getenv
 import datetime
 from uuid import UUID
 import json
 import os
 
 
+@unittest.skipIf(
+    getenv('HBNB_TYPE_STORAGE') == 'db',
+    'FileStorage-oriented model test'
+)
+@unittest.skipIf(
+    getenv('HBNB_TYPE_STORAGE') == 'db',
+    'FileStorage-specific model tests'
+)
 class test_basemodel(unittest.TestCase):
     """ """
 
@@ -24,7 +33,7 @@ class test_basemodel(unittest.TestCase):
     def tearDown(self):
         try:
             os.remove('file.json')
-        except:
+        except Exception:
             pass
 
     def test_default(self):

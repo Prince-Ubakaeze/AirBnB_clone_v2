@@ -1,9 +1,15 @@
-#!/usr/bin/python3
+import unittest
+from os import getenv
+# !/usr/bin/python3
 """ """
 from tests.test_models.test_base_model import test_basemodel
 from models.review import Review
 
 
+@unittest.skipIf(
+    getenv('HBNB_TYPE_STORAGE') == 'db',
+    'FileStorage-specific model tests'
+)
 class test_review(test_basemodel):
     """ """
 
