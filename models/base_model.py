@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """This module defines a base class for all models in our hbnb clone"""
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class BaseModel:
@@ -13,6 +13,8 @@ class BaseModel:
             self.id = str(uuid.uuid4())
             self.created_at = datetime.now()
             self.updated_at = datetime.now()
+            if self.updated_at == self.created_at:
+                self.updated_at = self.created_at + timedelta(microseconds=1)
             storage.new(self)
         else:
             kwargs['updated_at'] = datetime.strptime(kwargs['updated_at'],
