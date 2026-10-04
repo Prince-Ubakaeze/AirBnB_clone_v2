@@ -5,10 +5,15 @@ from datetime import datetime, timedelta
 from os import getenv
 
 from sqlalchemy import Column, DateTime, String
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.ext.declarative import declarative_base
 
 
-Base = declarative_base()
+time = '%Y-%m-%dT%H:%M:%S.%f'
+
+if getenv('HBNB_TYPE_STORAGE') == 'db':
+    Base = declarative_base()
+else:
+    Base = object
 
 
 class BaseModel:
@@ -16,35 +21,41 @@ class BaseModel:
 
     if getenv('HBNB_TYPE_STORAGE') == 'db':
         id = Column(String(60), primary_key=True, nullable=False)
-        created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-        updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow)
 
     def __init__(self, *args, **kwargs):
-        """Initialize a new model."""
+        """Initialize a model instance."""
         if kwargs:
-            for key, value in kwargs.items():
-                if key == '__class__':
-                    continue
+            if getenv('HBNB_TYPE_STORAGE') != 'db':
+                kwargs['updated_at'] = datetime.strptime(
+                    kwargs['updated_at'], time
+                )
+                kwargs['created_at'] = datetime.strptime(
+                    kwargs['created_at'], time
+                )
+                del kwargs['__class__']
+                self.__dict__.update(kwargs)
+            else:
+                for key, value in kwargs.items():
+                    if key == '__class__':
+                        continue
 
-                if key in ('created_at', 'updated_at'):
-                    if isinstance(value, str):
-                        value = datetime.strptime(
-                            value, '%Y-%m-%dT%H:%M:%S.%f'
-                        )
+                    if key in ('created_at', 'updated_at'):
+                        if isinstance(value, str):
+                            value = datetime.strptime(value, time)
 
-                setattr(self, key, value)
+                    setattr(self, key, value)
 
-            if 'id' not in kwargs:
-                self.id = str(uuid.uuid4())
+                if 'id' not in kwargs:
+                    self.id = str(uuid.uuid4())
 
-            if 'created_at' not in kwargs:
-                self.created_at = datetime.now()
+                if 'created_at' not in kwargs:
+                    self.created_at = datetime.utcnow()
 
-            if 'updated_at' not in kwargs:
-                self.updated_at = datetime.now()
+                if 'updated_at' not in kwargs:
+                    self.updated_at = datetime.utcnow()
         else:
-            from models import storage
-
             self.id = str(uuid.uuid4())
             self.created_at = datetime.now()
             self.updated_at = datetime.now()
@@ -54,23 +65,35 @@ class BaseModel:
                     self.created_at + timedelta(microseconds=1)
                 )
 
-            storage.new(self)
+            if getenv('HBNB_TYPE_STORAGE') != 'db':
+                from models import storage
+                storage.new(self)
 
     def __str__(self):
-        """Return string representation of the instance."""
-        cls = self.__class__.__name__
-        return '[{}] ({}) {}'.format(cls, self.id, self.__dict__)
+        """Return the string representation of the instance."""
+        return '[{}] ({}) {}'.format(
+            self.__class__.__name__,
+            self.id,
+            self.__dict__
+        )
 
     def save(self):
         """Update updated_at and save the instance."""
         from models import storage
 
         self.updated_at = datetime.now()
-        storage.save()
+
+        if getenv('HBNB_TYPE_STORAGE') == 'db':
+            if self.__class__.__name__ != 'BaseModel':
+                storage.new(self)
+                storage.save()
+        else:
+            storage.save()
 
     def to_dict(self):
-        """Return dictionary representation of the instance."""
+        """Return a dictionary representation of the instance."""
         dictionary = dict(self.__dict__)
+
         dictionary['__class__'] = self.__class__.__name__
 
         if 'created_at' in dictionary:
@@ -80,4 +103,11 @@ class BaseModel:
             dictionary['updated_at'] = self.updated_at.isoformat()
 
         dictionary.pop('_sa_instance_state', None)
+
         return dictionary
+
+    def delete(self):
+        """Delete this instance from storage."""
+        from models import storage
+
+        storage.delete(self)
