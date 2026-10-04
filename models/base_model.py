@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Defines the BaseModel class."""
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timedelta
 from os import getenv
 
 from sqlalchemy import Column, DateTime, String
@@ -65,12 +65,17 @@ class BaseModel:
                     self.created_at + timedelta(microseconds=1)
                 )
 
+            if self.updated_at == self.created_at:
+                self.updated_at = (
+                    self.created_at + timedelta(microseconds=1)
+                )
+
             if getenv('HBNB_TYPE_STORAGE') != 'db':
                 from models import storage
                 storage.new(self)
 
     def __str__(self):
-        """Return the string representation of the instance."""
+        """Return string representation of the model."""
         return '[{}] ({}) {}'.format(
             self.__class__.__name__,
             self.id,
@@ -78,7 +83,7 @@ class BaseModel:
         )
 
     def save(self):
-        """Update updated_at and save the instance."""
+        """Update updated_at and save the model."""
         from models import storage
 
         self.updated_at = datetime.now()
@@ -86,14 +91,12 @@ class BaseModel:
         if getenv('HBNB_TYPE_STORAGE') == 'db':
             if self.__class__.__name__ != 'BaseModel':
                 storage.new(self)
-                storage.save()
-        else:
-            storage.save()
+
+        storage.save()
 
     def to_dict(self):
-        """Return a dictionary representation of the instance."""
-        dictionary = dict(self.__dict__)
-
+        """Return dictionary representation of the model."""
+        dictionary = self.__dict__.copy()
         dictionary['__class__'] = self.__class__.__name__
 
         if 'created_at' in dictionary:
@@ -107,7 +110,6 @@ class BaseModel:
         return dictionary
 
     def delete(self):
-        """Delete this instance from storage."""
+        """Delete this object from storage."""
         from models import storage
-
         storage.delete(self)
