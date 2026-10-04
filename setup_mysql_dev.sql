@@ -1,3 +1,4 @@
+-- prepares a MySQL server for the development environment
 CREATE DATABASE IF NOT EXISTS hbnb_dev_db;
 
 CREATE USER IF NOT EXISTS 'hbnb_dev'@'localhost'
