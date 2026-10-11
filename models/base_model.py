@@ -30,8 +30,8 @@ class BaseModel:
                     value = datetime.fromisoformat(value)
                 setattr(self, key, value)
 
-        # BaseModel is not mapped; class-level SQLAlchemy Column objects
-        # must not be mistaken for populated instance attributes.
+        # BaseModel itself is not mapped: do not mistake the inherited
+        # SQLAlchemy Column descriptors for actual instance values.
         if not isinstance(self.__dict__.get('id'), str) or not self.__dict__['id']:
             self.id = str(uuid4())
         if not isinstance(self.__dict__.get('created_at'), datetime):
@@ -40,7 +40,7 @@ class BaseModel:
             self.updated_at = datetime.utcnow()
 
     def __str__(self):
-        """Return the project's existing string representation."""
+        """Return the representation expected by the existing console."""
         return '[{}] ({}) {}'.format(type(self).__name__, self.id,
                                      self.__dict__)
 

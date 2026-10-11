@@ -58,8 +58,8 @@ class Place(BaseModel, Base):
             """Review objects linked to this place in FileStorage."""
             from models import storage
             from models.review import Review
-            return [review for review in storage.all(Review).values()
-                    if review.place_id == self.id]
+            return [review for review in storage.all().values()
+                    if isinstance(review, Review) and review.place_id == self.id]
 
         @property
         def amenities(self):
@@ -67,8 +67,8 @@ class Place(BaseModel, Base):
             from models import storage
             from models.amenity import Amenity
             ids = getattr(self, 'amenity_ids', []) or []
-            return [amenity for amenity in storage.all(Amenity).values()
-                    if amenity.id in ids]
+            return [amenity for amenity in storage.all().values()
+                    if isinstance(amenity, Amenity) and amenity.id in ids]
 
         @amenities.setter
         def amenities(self, value):
