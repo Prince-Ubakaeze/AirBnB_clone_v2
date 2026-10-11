@@ -1,0 +1,66 @@
+#!/usr/bin/python3
+"""Common model behavior and SQLAlchemy declarative metadata."""
+from datetime import datetime
+from uuid import uuid4
+
+from sqlalchemy import Column, DateTime, String
+from sqlalchemy.orm import declarative_base
+
+
+Base = declarative_base()
+
+
+class BaseModel:
+    """Shared fields and persistence helpers for all models.
+
+    BaseModel is a mixin; it deliberately does not inherit from Base.
+    """
+
+    id = Column(String(60), primary_key=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __init__(self, *args, **kwargs):
+        """Create an object from optional serialized attributes."""
+        if kwargs:
+            for key, value in kwargs.items():
+                if key in ('__class__', '_sa_instance_state'):
+                    continue
+                if key in ('created_at', 'updated_at') and isinstance(value, str):
+                    value = datetime.fromisoformat(value)
+                setattr(self, key, value)
+
+        if self.id is None:
+            self.id = str(uuid4())
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        if self.updated_at is None:
+            self.updated_at = datetime.utcnow()
+
+    def __str__(self):
+        """Return an instance description without internal SQLAlchemy state."""
+        attrs = {k: v for k, v in self.__dict__.items()
+                 if k != '_sa_instance_state'}
+        return '[{}] ({}) {}'.format(type(self).__name__, self.id, attrs)
+
+    def save(self):
+        """Add or update this object through the selected storage engine."""
+        import models
+        self.updated_at = datetime.utcnow()
+        models.storage.new(self)
+        models.storage.save()
+
+    def to_dict(self):
+        """Serialize scalar state, excluding SQLAlchemy instrumentation."""
+        result = dict(self.__dict__)
+        result.pop('_sa_instance_state', None)
+        result['__class__'] = type(self).__name__
+        for key in ('created_at', 'updated_at'):
+            if isinstance(result.get(key), datetime):
+                result[key] = result[key].isoformat()
+        return result
+
+    def delete(self):
+        """Mark this object for deletion in the selected engine."""
+        import models
+        models.storage.delete(self)

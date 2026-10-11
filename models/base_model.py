@@ -1,115 +1,67 @@
 #!/usr/bin/python3
-"""Defines the BaseModel class."""
-import uuid
-from datetime import datetime, timedelta
-from os import getenv
+"""Common model behavior and SQLAlchemy declarative metadata."""
+from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, String
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 
-time = '%Y-%m-%dT%H:%M:%S.%f'
-
-if getenv('HBNB_TYPE_STORAGE') == 'db':
-    Base = declarative_base()
-else:
-    Base = object
+Base = declarative_base()
 
 
 class BaseModel:
-    """Base class for all HBNB models."""
+    """Shared fields and persistence helpers for all models.
 
-    if getenv('HBNB_TYPE_STORAGE') == 'db':
-        id = Column(String(60), primary_key=True, nullable=False)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow)
+    BaseModel is a mixin; it deliberately does not inherit from Base.
+    """
+
+    id = Column(String(60), primary_key=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     def __init__(self, *args, **kwargs):
-        """Initialize a model instance."""
+        """Create an object from optional serialized attributes."""
         if kwargs:
-            if getenv('HBNB_TYPE_STORAGE') != 'db':
-                kwargs['updated_at'] = datetime.strptime(
-                    kwargs['updated_at'], time
-                )
-                kwargs['created_at'] = datetime.strptime(
-                    kwargs['created_at'], time
-                )
-                del kwargs['__class__']
-                self.__dict__.update(kwargs)
-            else:
-                for key, value in kwargs.items():
-                    if key == '__class__':
-                        continue
+            for key, value in kwargs.items():
+                if key in ('__class__', '_sa_instance_state'):
+                    continue
+                if key in ('created_at', 'updated_at') and isinstance(value, str):
+                    value = datetime.fromisoformat(value)
+                setattr(self, key, value)
 
-                    if key in ('created_at', 'updated_at'):
-                        if isinstance(value, str):
-                            value = datetime.strptime(value, time)
-
-                    setattr(self, key, value)
-
-                if 'id' not in kwargs:
-                    self.id = str(uuid.uuid4())
-
-                if 'created_at' not in kwargs:
-                    self.created_at = datetime.utcnow()
-
-                if 'updated_at' not in kwargs:
-                    self.updated_at = datetime.utcnow()
-        else:
-            self.id = str(uuid.uuid4())
-            self.created_at = datetime.now()
-            self.updated_at = datetime.now()
-
-            if self.updated_at == self.created_at:
-                self.updated_at = (
-                    self.created_at + timedelta(microseconds=1)
-                )
-
-            if self.updated_at == self.created_at:
-                self.updated_at = (
-                    self.created_at + timedelta(microseconds=1)
-                )
-
-            if getenv('HBNB_TYPE_STORAGE') != 'db':
-                from models import storage
-                storage.new(self)
+        # BaseModel is not mapped; class-level SQLAlchemy Column objects
+        # must not be mistaken for populated instance attributes.
+        if not isinstance(self.__dict__.get('id'), str) or not self.__dict__['id']:
+            self.id = str(uuid4())
+        if not isinstance(self.__dict__.get('created_at'), datetime):
+            self.created_at = datetime.utcnow()
+        if not isinstance(self.__dict__.get('updated_at'), datetime):
+            self.updated_at = datetime.utcnow()
 
     def __str__(self):
-        """Return string representation of the model."""
-        return '[{}] ({}) {}'.format(
-            self.__class__.__name__,
-            self.id,
-            self.__dict__
-        )
+        """Return the project's existing string representation."""
+        return '[{}] ({}) {}'.format(type(self).__name__, self.id,
+                                     self.__dict__)
 
     def save(self):
-        """Update updated_at and save the model."""
-        from models import storage
-
-        self.updated_at = datetime.now()
-
-        if getenv('HBNB_TYPE_STORAGE') == 'db':
-            if self.__class__.__name__ != 'BaseModel':
-                storage.new(self)
-
-        storage.save()
+        """Add or update this object through the selected storage engine."""
+        import models
+        self.updated_at = datetime.utcnow()
+        models.storage.new(self)
+        models.storage.save()
 
     def to_dict(self):
-        """Return dictionary representation of the model."""
-        dictionary = self.__dict__.copy()
-        dictionary['__class__'] = self.__class__.__name__
-
-        if 'created_at' in dictionary:
-            dictionary['created_at'] = self.created_at.isoformat()
-
-        if 'updated_at' in dictionary:
-            dictionary['updated_at'] = self.updated_at.isoformat()
-
-        dictionary.pop('_sa_instance_state', None)
-
-        return dictionary
+        """Serialize scalar state, excluding SQLAlchemy instrumentation."""
+        result = dict(self.__dict__)
+        result.pop('_sa_instance_state', None)
+        result['__class__'] = type(self).__name__
+        for key in ('created_at', 'updated_at'):
+            if isinstance(result.get(key), datetime):
+                result[key] = result[key].isoformat()
+        return result
 
     def delete(self):
-        """Delete this object from storage."""
-        from models import storage
-        storage.delete(self)
+        """Mark this object for deletion in the selected engine."""
+        import models
+        models.storage.delete(self)

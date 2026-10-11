@@ -1,24 +1,23 @@
 #!/usr/bin/python3
-"""Defines the City model."""
-from os import getenv
+"""City model and its DBStorage relationships."""
+import os
 
 from sqlalchemy import Column, ForeignKey, String
+from sqlalchemy.orm import relationship
 
-from models.base_model import Base, BaseModel
+from models.base_model import BaseModel, Base
 
 
 class City(BaseModel, Base):
-    """City model."""
+    """A city located in a state."""
 
     __tablename__ = 'cities'
-
-    if getenv('HBNB_TYPE_STORAGE') == 'db':
-        state_id = Column(
-            String(60),
-            ForeignKey('states.id'),
-            nullable=False
-        )
+    if os.getenv('HBNB_TYPE_STORAGE') == 'db':
         name = Column(String(128), nullable=False)
+        state_id = Column(String(60), ForeignKey('states.id'), nullable=False)
+        state = relationship('State', back_populates='cities')
+        places = relationship('Place', back_populates='cities',
+                              cascade='all, delete-orphan')
     else:
-        state_id = ''
         name = ''
+        state_id = ''

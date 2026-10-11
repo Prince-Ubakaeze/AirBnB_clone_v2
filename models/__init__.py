@@ -1,11 +1,16 @@
 #!/usr/bin/python3
-"""Initialize the models package."""
-from os import getenv
+"""Models and environment-configurable storage engine."""
+import os
 
+# Keep model exports used by console.py, tests and existing code.
+from models.amenity import Amenity
+from models.city import City
+from models.place import Place
+from models.review import Review
+from models.state import State
+from models.user import User
 
-storage_t = getenv('HBNB_TYPE_STORAGE')
-
-if storage_t == 'db':
+if os.getenv('HBNB_TYPE_STORAGE') == 'db':
     from models.engine.db_storage import DBStorage
     storage = DBStorage()
 else:

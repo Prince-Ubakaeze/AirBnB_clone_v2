@@ -1,35 +1,28 @@
 #!/usr/bin/python3
-"""Defines the State model."""
-from os import getenv
+"""State model with DBStorage and FileStorage-compatible cities."""
+import os
 
 from sqlalchemy import Column, String
 from sqlalchemy.orm import relationship
 
-from models.base_model import Base, BaseModel
+from models.base_model import BaseModel, Base
 
 
 class State(BaseModel, Base):
-    """State model."""
+    """A state containing cities."""
 
     __tablename__ = 'states'
-
-    if getenv('HBNB_TYPE_STORAGE') == 'db':
+    if os.getenv('HBNB_TYPE_STORAGE') == 'db':
         name = Column(String(128), nullable=False)
-        cities = relationship(
-            'City',
-            backref='state',
-            cascade='all, delete, delete-orphan'
-        )
+        cities = relationship('City', back_populates='state',
+                              cascade='all, delete-orphan')
     else:
         name = ''
 
         @property
         def cities(self):
-            """Return cities belonging to this state."""
+            """The associated City objects in FileStorage."""
             from models import storage
             from models.city import City
-
-            return [
-                city for city in storage.all(City).values()
-                if city.state_id == self.id
-            ]
+            return [city for city in storage.all(City).values()
+                    if city.state_id == self.id]

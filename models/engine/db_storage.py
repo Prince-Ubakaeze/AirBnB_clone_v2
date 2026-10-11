@@ -1,104 +1,85 @@
 #!/usr/bin/python3
-"""Defines the SQLAlchemy database storage engine."""
-from os import getenv
+"""SQLAlchemy/MySQL engine implementing the same interface as FileStorage."""
+import os
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from models.amenity import Amenity
 from models.base_model import Base
-from models.city import City
-from models.place import Place
-from models.review import Review
-from models.state import State
-from models.user import User
-
-
-classes = {
-    'Amenity': Amenity,
-    'City': City,
-    'Place': Place,
-    'Review': Review,
-    'State': State,
-    'User': User
-}
 
 
 class DBStorage:
-    """Manage storage using a MySQL database."""
+    """MySQL-backed storage of all AirBnB model instances."""
 
     __engine = None
     __session = None
 
     def __init__(self):
-        """Create the SQLAlchemy engine."""
-        user = getenv('HBNB_MYSQL_USER')
-        password = getenv('HBNB_MYSQL_PWD')
-        host = getenv('HBNB_MYSQL_HOST')
-        database = getenv('HBNB_MYSQL_DB')
-
-        url = 'mysql+mysqldb://{}:{}@{}/{}'.format(
-            user,
-            password,
-            host,
-            database
+        url = URL.create(
+            'mysql+mysqldb',
+            username=os.getenv('HBNB_MYSQL_USER'),
+            password=os.getenv('HBNB_MYSQL_PWD'),
+            host=os.getenv('HBNB_MYSQL_HOST'),
+            database=os.getenv('HBNB_MYSQL_DB'),
         )
-
-        self.__engine = create_engine(
-            url,
-            pool_pre_ping=True
-        )
-
-        if getenv('HBNB_ENV') == 'test':
+        self.__engine = create_engine(url, pool_pre_ping=True)
+        if os.getenv('HBNB_ENV') == 'test':
+            self._load_models()
             Base.metadata.drop_all(self.__engine)
 
+    @staticmethod
+    def _load_models():
+        """Ensure all table classes are registered with Base.metadata."""
+        import models.amenity
+        import models.city
+        import models.place
+        import models.review
+        import models.state
+        import models.user
+
+    @staticmethod
+    def _model_classes():
+        """Fetch supported mapped classes after importing their modules."""
+        from models.amenity import Amenity
+        from models.city import City
+        from models.place import Place
+        from models.review import Review
+        from models.state import State
+        from models.user import User
+        return (User, State, City, Amenity, Place, Review)
+
     def all(self, cls=None):
-        """Return objects, optionally filtered by class."""
-        result = {}
-
+        """Return a dictionary keyed as ClassName.id from the session."""
+        classes = self._model_classes()
         if isinstance(cls, str):
-            cls = classes.get(cls)
-
-        selected = classes.values() if cls is None else [cls]
-
-        for model in selected:
-            if model not in classes.values():
-                continue
-
+            cls = next((candidate for candidate in classes
+                        if candidate.__name__ == cls), None)
+            if cls is None:
+                return {}
+        targets = classes if cls is None else (cls,)
+        objects = {}
+        for model in targets:
             for obj in self.__session.query(model).all():
-                key = '{}.{}'.format(
-                    obj.__class__.__name__,
-                    obj.id
-                )
-                result[key] = obj
-
-        return result
+                objects['{}.{}'.format(type(obj).__name__, obj.id)] = obj
+        return objects
 
     def new(self, obj):
-        """Add an object to the current database session."""
+        """Add an object to the current SQL session."""
         self.__session.add(obj)
 
     def save(self):
-        """Commit changes in the current database session."""
+        """Commit the current SQL session."""
         self.__session.commit()
 
     def delete(self, obj=None):
-        """Delete obj from the current database session."""
+        """Delete an object from the current SQL session, if provided."""
         if obj is not None:
             self.__session.delete(obj)
 
     def reload(self):
-        """Create tables and initialize the database session."""
+        """Create database tables and configure thread-local sessions."""
+        self._load_models()
         Base.metadata.create_all(self.__engine)
-
-        factory = sessionmaker(
-            bind=self.__engine,
-            expire_on_commit=False
-        )
-
+        factory = sessionmaker(bind=self.__engine, expire_on_commit=False)
         self.__session = scoped_session(factory)
-
-    def close(self):
-        """Close the current scoped session."""
-        if self.__session is not None:
-            self.__session.remove()
