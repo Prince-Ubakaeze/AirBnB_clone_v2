@@ -1,0 +1,14 @@
+FROM python:3.10-slim-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash openssh-client tar \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-deploy.txt /tmp/requirements-deploy.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-deploy.txt \
+    && python -m pip check \
+    && python -c "from fabric.api import env, local, put, run, runs_once" \
+    && fab --version
+
+WORKDIR /workspace
+CMD ["bash"]
