@@ -1,62 +1,91 @@
-
 #!/usr/bin/python3
-"""Deploy a web_static archive to the web servers."""
-
+"""Pack web_static or deploy an existing archive to two hosts."""
+from datetime import datetime
 import os
-import re
+from shlex import quote
 
-from fabric.api import env, put, run, settings
+from fabric.api import env, local, put, run, settings
 
-env.hosts = [
-    "YOUR_WEB01_PUBLIC_IP",
-    "YOUR_WEB02_PUBLIC_IP"
-]
+# Replace these placeholders with the two actual server IP addresses.
+env.hosts = ["<IP web-01>", "<IP web-02>"]
+
+
+def do_pack():
+    """Return a timestamped web_static archive path, or None on failure."""
+    if not os.path.isdir("web_static"):
+        print("Packing failed: run from the repo containing web_static/.")
+        return None
+
+    archive_path = "versions/web_static_{}.tgz".format(
+        datetime.now().strftime("%Y%m%d%H%M%S"))
+    if os.path.exists(archive_path):
+        print("Packing failed: timestamp exists; retry in one second.")
+        return None
+
+    try:
+        with settings(warn_only=True, abort_exception=RuntimeError):
+            if local("mkdir -p versions").failed:
+                return None
+            print("Packing web_static to {}".format(archive_path))
+            result = local("tar -czf {} web_static".format(
+                quote(archive_path)))
+            if result.failed:
+                if os.path.isfile(archive_path):
+                    os.remove(archive_path)
+                return None
+        if not os.path.isfile(archive_path):
+            return None
+        print("web_static packed: {} -> {} Bytes".format(
+            archive_path, os.path.getsize(archive_path)))
+        return archive_path
+    except Exception as error:
+        print("Packing failed: {}".format(error))
+        return None
 
 
 def do_deploy(archive_path):
-    """Deploy archive and return whether deployment succeeded."""
+    """Deploy an archive on the current Fabric host; return success."""
     if not os.path.isfile(archive_path):
+        print("Deployment failed: archive does not exist.")
+        return False
+    if not env.host_string or "<" in env.host_string:
+        print("Deployment failed: configure both server IPs first.")
         return False
 
-    archive_name = os.path.basename(archive_path)
-
-    if not archive_name.endswith(".tgz"):
+    filename = os.path.basename(archive_path)
+    release_name, extension = os.path.splitext(filename)
+    if extension != ".tgz" or release_name in ("", ".", ".."):
+        print("Deployment failed: expected a named .tgz archive.")
         return False
 
-    release_name = archive_name[:-4]
-
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", release_name):
-        return False
-
-    remote_archive = "/tmp/{}".format(archive_name)
-    release_dir = "/data/web_static/releases/{}".format(
-        release_name
-    )
-
-    commands = [
-        "mkdir -p {}".format(release_dir),
-        "tar -xzf {} --strip-components=1 -C {}".format(
-            remote_archive, release_dir
-        ),
-        "rm -f {}".format(remote_archive),
-        "rm -f /data/web_static/current",
-        "ln -s {} /data/web_static/current".format(
-            release_dir
-        )
-    ]
-
+    upload = "/tmp/" + filename
+    release = "/data/web_static/releases/" + release_name
+    current = "/data/web_static/current"
     try:
-        with settings(warn_only=True):
-            upload = put(archive_path, remote_archive)
-            if upload.failed:
+        with settings(warn_only=True, abort_exception=RuntimeError):
+            # An existing release is never extracted over a live website.
+            if run("test ! -e {0} && test ! -L {0}".format(
+                    quote(release))).failed:
+                print("Deployment failed: release exists; pack a new one.")
                 return False
-
+            if put(archive_path, upload, use_glob=False).failed:
+                return False
+            commands = [
+                "mkdir -p {}".format(quote(release)),
+                "tar -xzf {} -C {} --strip-components=1".format(
+                    quote(upload), quote(release)),
+                "rm -f {}".format(quote(upload)),
+                "chmod -R a+rX {}".format(quote(release)),
+                # rm -f refuses a real directory; never recursively delete it.
+                "rm -f {}".format(quote(current)),
+                "ln -s {} {}".format(quote(release), quote(current)),
+            ]
             for command in commands:
-                result = run(command)
-                if result.failed:
+                if run(command).failed:
+                    print("Deployment failed on {}.".format(env.host_string))
                     return False
-
+        print("New version deployed on {}!".format(env.host_string))
         return True
-
-    except Exception:
+    except Exception as error:
+        print("Deployment failed: {}".format(error))
         return False
