@@ -1,40 +1,31 @@
+
 #!/usr/bin/python3
-"""Create a compressed archive of web_static."""
-from datetime import datetime
+"""Pack the web_static directory into a compressed archive."""
+
 import os
-from shlex import quote
+from datetime import datetime
 
 from fabric.api import local, settings
 
 
 def do_pack():
-    """Return a timestamped web_static archive path, or None on failure."""
+    """Create and return a compressed web_static archive."""
     if not os.path.isdir("web_static"):
-        print("Packing failed: run from the repo containing web_static/.")
         return None
 
-    archive_path = "versions/web_static_{}.tgz".format(
-        datetime.now().strftime("%Y%m%d%H%M%S"))
-    if os.path.exists(archive_path):
-        print("Packing failed: timestamp exists; retry in one second.")
+    if not os.path.isdir("versions"):
+        os.makedirs("versions")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    archive_path = "versions/web_static_{}.tgz".format(timestamp)
+
+    with settings(warn_only=True):
+        result = local(
+            "tar -czf {} web_static".format(archive_path),
+            capture=True
+        )
+
+    if result.failed or not os.path.isfile(archive_path):
         return None
 
-    try:
-        with settings(warn_only=True, abort_exception=RuntimeError):
-            if local("mkdir -p versions").failed:
-                return None
-            print("Packing web_static to {}".format(archive_path))
-            result = local("tar -czf {} web_static".format(
-                quote(archive_path)))
-            if result.failed:
-                if os.path.isfile(archive_path):
-                    os.remove(archive_path)
-                return None
-        if not os.path.isfile(archive_path):
-            return None
-        print("web_static packed: {} -> {} Bytes".format(
-            archive_path, os.path.getsize(archive_path)))
-        return archive_path
-    except Exception as error:
-        print("Packing failed: {}".format(error))
-        return None
+    return archive_path
